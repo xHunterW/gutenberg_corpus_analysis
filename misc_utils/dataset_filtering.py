@@ -25,13 +25,13 @@ def read_metadata_and_catalog(metadata_filepath: str, pg_catalog_filepath: str, 
     ind_to_drop = mq.df[mq.df['type'].isin(types_to_drop)].index
     mq.df.drop(ind_to_drop, inplace=True)
 
-    ind_to_drop = pg_df[pg_df['type'].isin(types_to_drop)].index
-    pg_df.drop(ind_to_drop, inplace=True)
-    
     # Let's rename the PG Catalog ID column
     pg_df.rename({'Text#':'PG_ID',
                   'Title': 'title',
                   'Type': 'type'}, axis='columns', inplace=True)
+
+    ind_to_drop = pg_df[pg_df['type'].isin(types_to_drop)].index
+    pg_df.drop(ind_to_drop, inplace=True)
 
     # Let's make an ID column in the metaquery df
     mq.df['PG_ID'] = mq.df['id'].str.replace('PG','')
@@ -43,7 +43,7 @@ def read_metadata_and_catalog(metadata_filepath: str, pg_catalog_filepath: str, 
 
     return mq.df.join(pg_df.set_index('PG_ID'), on='PG_ID', rsuffix='_pgc', how='inner')
 
-def compare_columns(df, col_a, col_b):
+def compare_columns(df, col_a, col_b, verbose=False):
     def compare(s1, s2):
         s1 = s1.replace('$b', '')
         s2 = s2.replace('$b', '')
@@ -62,33 +62,58 @@ def compare_columns(df, col_a, col_b):
     col_b_sanitized = df[col_b].str.replace('\r\n', ': ')
    # matches = df[col_a].apply()
     dont_match = df.loc[~(col_a_sanitized == col_b_sanitized)]
-
+    
+    entries_that_dont_match = []
+    attribute_errors=[]
     for _, row in dont_match.iterrows():
         try:
             comparison, s1_clean, s2_clean = compare(row[col_a], row[col_b])
             if comparison is False:
                 # The title in pg_catalog.csv is just the first part of the title, move along, all
                 # is well
-                if s1_clean.startswith(s2_clean):
+                if s1_clean.startswith(s2_clean) or s2_clean.startswith(s1_clean):
                     pass
                     #print('THEY DO MATCH')
                 else:
-                    print('THEY DONT')
-                    print('Dont Match:')
-                    print(row[col_a])
-                    print(row[col_b])
+                    if verbose:
+                        print(f'Dont Match: id: {row["id"]}   {row[col_a]}   {row[col_b]}')
+                    entries_that_dont_match.append(row)
 
-                    print(s1_clean)
-                    print(s2_clean)
-                    print()
         except AttributeError as e:
-            print()
-            print(row)
-            print(row[col_a])
-            print(row[col_b])
-            print()
+            attribute_errors.append(row)
+            if verbose:
+                print('\nAttribute Error')
+                print(row[['id', 'title', col_a, col_b]])
 
             #raise e
+    return dont_match, attribute_errors
+
+
+def add_line_counts(df, raw_text_path, drop_missing=False):
+    def _get_line_and_word_info_single_book(pg_id, raw_text_path):
+        file_path = os.path.join(raw_text_path, f'{pg_id}_text.txt')
+        if not os.path.exists(file_path):
+            return None, None, None
+        with open(file_path) as f:
+            book_text = f.readlines()
+        num_lines = len(book_text)
+
+        with open(file_path) as f:
+            book_text = f.read()
+        num_words=len(book_text.split())
+
+        num_unique_words = len(set(book_text.split()))
+        return num_lines, num_words, num_unique_words
+
+    df[['num_lines', 'num_words', 'num_unique_words'] ]= df.apply(
+                lambda row: _get_line_and_word_info_single_book(row['id'],raw_text_path), axis='columns',result_type='expand')
+    
+    if drop_missing:
+        mask = df['num_lines']==None and df['num_words']==None and df['num_unique_words']==None
+        df.drop(df[mask].index, inplace=True)
+    return df
+
+def no
 
 if __name__ == '__main__':
     mq_filepath='/Users/dean/Documents/gitRepos/gutenberg/metadata/metadata.csv'
