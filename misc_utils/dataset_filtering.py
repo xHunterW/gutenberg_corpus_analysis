@@ -113,8 +113,6 @@ def add_line_counts(df, raw_text_path, drop_missing=False):
         df.drop(df[mask].index, inplace=True)
     return df
 
-def no
-
 if __name__ == '__main__':
     mq_filepath='/Users/dean/Documents/gitRepos/gutenberg/metadata/metadata.csv'
     pg_catalog_filepath='/Users/dean/Documents/gitRepos/gutenberg_corpus_analysis/pg_catalog.csv'
