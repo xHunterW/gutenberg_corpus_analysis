@@ -4,17 +4,18 @@
 """
 
 import os
-import re
-import pandas as pd
 import sys
 import string
+import pandas as pd
+
 
 repos = os.path.join(os.path.dirname(__file__), os.pardir, os.pardir)
 sys.path.append(repos)
 
 import gutenberg.src.metaquery as metaquery
 
-def read_metadata_and_catalog(metadata_filepath: str, pg_catalog_filepath: str, filter_exist:bool=False, 
+
+def read_metadata_and_catalog(metadata_filepath: str, pg_catalog_filepath: str, filter_exist: bool=False,
                               types_to_drop=['Sound', 'Collection', 'Image', 'StillImage', 'MovingImage', 'Dataset']):
     # Read them in
     mq = metaquery.meta_query(path=metadata_filepath, filter_exist=filter_exist)
@@ -26,7 +27,7 @@ def read_metadata_and_catalog(metadata_filepath: str, pg_catalog_filepath: str, 
     mq.df.drop(ind_to_drop, inplace=True)
 
     # Let's rename the PG Catalog ID column
-    pg_df.rename({'Text#':'PG_ID',
+    pg_df.rename({'Text#': 'PG_ID',
                   'Title': 'title',
                   'Type': 'type'}, axis='columns', inplace=True)
 
@@ -34,7 +35,7 @@ def read_metadata_and_catalog(metadata_filepath: str, pg_catalog_filepath: str, 
     pg_df.drop(ind_to_drop, inplace=True)
 
     # Let's make an ID column in the metaquery df
-    mq.df['PG_ID'] = mq.df['id'].str.replace('PG','')
+    mq.df['PG_ID'] = mq.df['id'].str.replace('PG', '')
 
     # Lets make the columns ints
     mq.df['PG_ID'] = pd.to_numeric(mq.df['PG_ID'])
@@ -42,6 +43,7 @@ def read_metadata_and_catalog(metadata_filepath: str, pg_catalog_filepath: str, 
     pg_df.drop('Issued', axis=1, inplace=True)
 
     return mq.df.join(pg_df.set_index('PG_ID'), on='PG_ID', rsuffix='_pgc', how='inner')
+
 
 def compare_columns(df, col_a, col_b, verbose=False):
     def compare(s1, s2):
@@ -60,11 +62,11 @@ def compare_columns(df, col_a, col_b, verbose=False):
 
     col_a_sanitized = df[col_a].str.replace('\r\n', ': ')
     col_b_sanitized = df[col_b].str.replace('\r\n', ': ')
-   # matches = df[col_a].apply()
+    # matches = df[col_a].apply()
     dont_match = df.loc[~(col_a_sanitized == col_b_sanitized)]
-    
+
     entries_that_dont_match = []
-    attribute_errors=[]
+    attribute_errors = []
     for _, row in dont_match.iterrows():
         try:
             comparison, s1_clean, s2_clean = compare(row[col_a], row[col_b])
@@ -73,7 +75,7 @@ def compare_columns(df, col_a, col_b, verbose=False):
                 # is well
                 if s1_clean.startswith(s2_clean) or s2_clean.startswith(s1_clean):
                     pass
-                    #print('THEY DO MATCH')
+                    # print('THEY DO MATCH')
                 else:
                     if verbose:
                         print(f'Dont Match: id: {row["id"]}   {row[col_a]}   {row[col_b]}')
@@ -82,39 +84,95 @@ def compare_columns(df, col_a, col_b, verbose=False):
         except AttributeError as e:
             attribute_errors.append(row)
             if verbose:
-                print('\nAttribute Error')
+                print(f'\nAttribute Error: {e}')
                 print(row[['id', 'title', col_a, col_b]])
 
-            #raise e
+            # raise e
     return dont_match, attribute_errors
 
 
-def add_line_counts(df, raw_text_path, drop_missing=False):
-    def _get_line_and_word_info_single_book(pg_id, raw_text_path):
-        file_path = os.path.join(raw_text_path, f'{pg_id}_text.txt')
-        if not os.path.exists(file_path):
-            return None, None, None
-        with open(file_path) as f:
-            book_text = f.readlines()
-        num_lines = len(book_text)
+def get_word_count(book_id, raw_text_dir):
+    """
+    Given something like 'PG10007' and a directory containing a file called
+    'PG10007_counts.txt' whose lines each have a word and a count, sum up
+    all those counts and return the total.
+    """
+    filename = f"{book_id}_counts.txt"
+    file_path = os.path.join(raw_text_dir, filename)
 
-        with open(file_path) as f:
-            book_text = f.read()
-        num_words=len(book_text.split())
+    # If the file doesn’t exist, return None
+    if not os.path.exists(file_path):
+        return None
 
-        num_unique_words = len(set(book_text.split()))
-        return num_lines, num_words, num_unique_words
+    total_count = 0
+    with open(file_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            # Each line looks like: word count
+            word, count_str = line.strip().split()
+            total_count += int(count_str)
 
-    df[['num_lines', 'num_words', 'num_unique_words'] ]= df.apply(
-                lambda row: _get_line_and_word_info_single_book(row['id'],raw_text_path), axis='columns',result_type='expand')
-    
-    if drop_missing:
-        mask = df['num_lines']==None and df['num_words']==None and df['num_unique_words']==None
-        df.drop(df[mask].index, inplace=True)
-    return df
+    return total_count
+
+
+def get_unique_word_count(book_id, raw_text_dir):
+    """
+    Given something like 'PG10007' and a directory containing a file
+    called 'PG10007_counts.txt' whose lines each have 'word count',
+    return how many lines that file has (i.e., how many unique words).
+    """
+    filename = f"{book_id}_counts.txt"
+    file_path = os.path.join(raw_text_dir, filename)
+
+    if not os.path.exists(file_path):
+        return None
+
+    # Count lines to get # of unique words
+    with open(file_path, 'r', encoding='utf-8') as f:
+        num_unique_words = sum(1 for _ in f)
+
+    return num_unique_words
+
+
+def get_line_count(book_id, text_dir):
+    """
+    Given something like 'PG10007' and a directory containing
+    'PG10007_text.txt', return how many lines are in the file.
+    """
+    filename = f"{book_id}_text.txt"
+    file_path = os.path.join(text_dir, filename)
+
+    # If the file doesn’t exist, return None (or 0)
+    if not os.path.exists(file_path):
+        return None
+
+    # Count lines
+    with open(file_path, 'r', encoding='utf-8') as f:
+        line_count = sum(1 for _ in f)
+
+    return line_count
+
+
+def get_token_count(book_id, text_dir):
+    """
+    Given something like 'PG10007' and a directory containing
+    'PG10007_tokens.txt', return how many lines are in the file.
+    """
+    filename = f"{book_id}_tokens.txt"
+    file_path = os.path.join(text_dir, filename)
+
+    # If the file doesn’t exist, return None (or 0)
+    if not os.path.exists(file_path):
+        return None
+
+    # Count lines
+    with open(file_path, 'r', encoding='utf-8') as f:
+        token_count = sum(1 for _ in f)
+
+    return token_count
+
 
 if __name__ == '__main__':
-    mq_filepath='/Users/dean/Documents/gitRepos/gutenberg/metadata/metadata.csv'
-    pg_catalog_filepath='/Users/dean/Documents/gitRepos/gutenberg_corpus_analysis/pg_catalog.csv'
+    mq_filepath = '/Users/dean/Documents/gitRepos/gutenberg/metadata/metadata.csv'
+    pg_catalog_filepath = '/Users/dean/Documents/gitRepos/gutenberg_corpus_analysis/pg_catalog.csv'
 
     print(read_metadata_and_catalog(mq_filepath, pg_catalog_filepath))
