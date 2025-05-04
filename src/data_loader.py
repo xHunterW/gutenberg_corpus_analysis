@@ -3,6 +3,7 @@ import random
 from pathlib import Path
 
 import pandas as pd
+import numpy as np
 
 
 class GutenbergDataLoader:
@@ -196,3 +197,22 @@ class GutenbergDataLoader:
             lambda x: self._random_chunk_one_text(x, num_chunks, chunk_size, overlap))
         self.val_df['text'] = self.val_df['text'].apply(
             lambda x: self._random_chunk_one_text(x, num_chunks, chunk_size, overlap))
+
+    def parse_subjects(df):
+        subj = df['subjects'].replace('set()', np.nan)
+        subj_docs = []
+        for h in subj:
+            try:
+                h = h.strip("{}")[1:-1]
+            except AttributeError:
+                subj_docs.append(h)
+                continue
+            h = h.replace(' -- ', '-')
+            h = h.replace("', '","_")
+            h = h.split('_')
+            h = [item.replace(' ','').replace(',', ' ') for item in h]
+            h = ' '.join(h)
+            subj_docs.append(h)
+
+        df['subj_str']=subj_docs
+        return df
