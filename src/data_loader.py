@@ -2,20 +2,23 @@ import os
 
 import pandas as pd
 
-def load_dfs(dataset_folder='sample_dataset', train_csv='final_train.csv', 
-             val_csv='final_val.csv', test_csv='final_test.csv'):
+
+class GutenbergDataLoader:
     """
-    Load the dataframes from the specified paths.
+    GutenbergDataLoader class to handle loading and preprocessing of datasets.
     """
-    # Load the dataframes
-    train_csv = os.path.join(dataset_folder, 'final_train.csv')
-    val_csv = os.path.join(dataset_folder, 'final_val.csv')
-    test_csv = os.path.join(dataset_folder, 'final_test.csv')
 
-    print(os.path.abspath(train_csv))
+    def __init__(self, data_dir='sample_dataset', train_csv='final_train.csv',
+                 val_csv='final_val.csv', test_csv='final_test.csv', gutenberg_repo_path=None):
+        self._data_dir = data_dir
 
-    train_df = pd.read_csv(train_csv, index_col='Unnamed: 0')
-    val_df = pd.read_csv(val_csv, index_col='Unnamed: 0')
-    test_df = pd.read_csv(test_csv, index_col='Unnamed: 0')
+        self.train_df = self._load_data_set(train_csv)
+        self.val_df = self._load_data_set(val_csv)
+        self.test_df = self._load_data_set(test_csv)
 
-    return train_df, val_df, test_df
+    def _load_data_set(self, csv_file):
+        """
+        Load a dataframe from a CSV file and enrich it with token and word information.
+        """
+        csv_path = os.path.join(self._data_dir, csv_file)
+        df = pd.read_csv(csv_path, index_col='Unnamed: 0')
