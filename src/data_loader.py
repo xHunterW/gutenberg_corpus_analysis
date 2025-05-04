@@ -43,7 +43,7 @@ class GutenbergDataLoader:
         csv_path = os.path.join(self._data_dir, csv_file)
         df = pd.read_csv(csv_path, index_col='Unnamed: 0')
         df['text'] = df['id'].apply(lambda x: self._get_book(x))
-
+        df['text'] = df['text'].apply(lambda x: self._skip_start_and_end(x))
 
         return df
 
@@ -156,3 +156,8 @@ class GutenbergDataLoader:
             token_count = sum(1 for _ in f)
 
         return token_count
+
+    def _skip_start_and_end(text, num_chars=100):
+        text = text.split(' ')
+        text = text[num_chars:-num_chars]
+        return ' '.join(text)
