@@ -1,7 +1,8 @@
 import os
+import random
+from pathlib import Path
 
 import pandas as pd
-from pathlib import Path
 
 
 class GutenbergDataLoader:
@@ -11,7 +12,7 @@ class GutenbergDataLoader:
 
     def __init__(self, data_dir='sample_dataset',
                  train_csv='final_train.csv', val_csv='final_val.csv', test_csv='final_test.csv',
-                 gutenberg_repo_path=None, enrich_df=True):
+                 gutenberg_repo_path=None, enrich_df=True, skip_first_and_last_words=100):
 
         self._data_dir = data_dir
 
@@ -27,30 +28,29 @@ class GutenbergDataLoader:
 
         self._gutenberg_data_path = os.path.join(gutenberg_repo_path, 'data')
 
-        self.train_df = self._load_data_set(train_csv)
-        self.val_df = self._load_data_set(val_csv)
-        self.test_df = self._load_data_set(test_csv)
+        self.train_df = self._load_data_set(train_csv, skip_first_and_last_words)
+        self.val_df = self._load_data_set(val_csv, skip_first_and_last_words)
+        self.test_df = self._load_data_set(test_csv, skip_first_and_last_words)
 
         if enrich_df:
             self.train_df = self._enrich_dataframe(self.train_df)
             self.val_df = self._enrich_dataframe(self.val_df)
             self.test_df = self._enrich_dataframe(self.test_df)
 
-    def _load_data_set(self, csv_file):
+    def _load_data_set(self, csv_file, skip_first_and_last_words=100):
         """
         Load a dataframe from a CSV file and enrich it with token and word information.
         """
         csv_path = os.path.join(self._data_dir, csv_file)
         df = pd.read_csv(csv_path, index_col='Unnamed: 0')
-        df['text'] = df['id'].apply(lambda x: self._get_book(x))
-        df['text'] = df['text'].apply(lambda x: self._skip_start_and_end(x))
+        df['text'] = df['id'].apply(lambda x: self._get_book(x, skip_first_and_last_words=100))
 
         return df
 
     # TODO: add the ability to use the gutenberg.data_io.get_book function in order to fetch the book text
     #       This will allow getting the pre-calculated count and token information, if using the original
     #       gutenberg repo (Standardized Project Gutenberg Corpus)
-    def _get_book(self, pg_id):
+    def _get_book(self, pg_id, skip_first_and_last_words=100):
         """
         Fetch the book text using the pg_id."""
         ## location of the gutenberg data
@@ -63,7 +63,15 @@ class GutenbergDataLoader:
 
         with open(filename,'r') as f:
             x = f.readlines()
+
         text =  ' '.join([h.strip() for h in x])
+
+        # Skip the first and last N words (technically there might be a few spaces in there)
+        if skip_first_and_last_words > 0:
+            text = text.split(' ')
+            text = text[skip_first_and_last_words:-skip_first_and_last_words]
+            text = ' '.join(text)
+
         return text
 
     def _enrich_dataframe(self, df):
@@ -156,8 +164,3 @@ class GutenbergDataLoader:
             token_count = sum(1 for _ in f)
 
         return token_count
-
-    def _skip_start_and_end(text, num_chars=100):
-        text = text.split(' ')
-        text = text[num_chars:-num_chars]
-        return ' '.join(text)
