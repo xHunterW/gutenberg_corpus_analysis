@@ -164,3 +164,35 @@ class GutenbergDataLoader:
             token_count = sum(1 for _ in f)
 
         return token_count
+
+    def _random_chunk_one_text(self, text, num_chunks=10, chunk_size=1000, overlap=False):
+        chunk = []
+        words = text.split(' ')
+
+        if num_chunks * chunk_size > len(words):
+            return text
+        for i in range(num_chunks):
+            new_words = []
+            num_words = len(words)
+            if chunk_size > num_words:
+                chunk = chunk + words
+                words = []
+                return ' '.join(chunk)
+
+            start = random.randint(0, num_words)
+            chunk = [*chunk,  *words[start:start+chunk_size]]
+            if start == 0:
+                words = words[chunk_size:]
+            elif start == num_words - chunk_size:
+                words = words[0:start]
+            else:
+                words = words[0:start] + words[start+chunk_size:]
+        return ' '.join(chunk)
+
+    def random_chunk_all_text(self, num_chunks=10, chunk_size=1000, overlap=False):
+        self.train_df['text'] = self.train_df['text'].apply(
+            lambda x: self._random_chunk_one_text(x, num_chunks, chunk_size, overlap))
+        self.test_df['text'] = self.test_df['text'].apply(
+            lambda x: self._random_chunk_one_text(x, num_chunks, chunk_size, overlap))
+        self.val_df['text'] = self.val_df['text'].apply(
+            lambda x: self._random_chunk_one_text(x, num_chunks, chunk_size, overlap))
