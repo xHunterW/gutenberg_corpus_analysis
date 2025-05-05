@@ -4,6 +4,10 @@ from pathlib import Path
 
 import pandas as pd
 import numpy as np
+from nltk.tokenize import word_tokenize
+from tqdm.contrib.concurrent import process_map
+
+
 
 
 class GutenbergDataLoader:
@@ -13,9 +17,12 @@ class GutenbergDataLoader:
 
     def __init__(self, data_dir='sample_dataset',
                  train_csv='final_train.csv', val_csv='final_val.csv', test_csv='final_test.csv',
-                 gutenberg_repo_path=None, enrich_df=True, skip_first_and_last_words=100):
+                 gutenberg_repo_path=None, enrich_df=True, skip_first_and_last_words=100, num_threads=None):
 
         self._data_dir = data_dir
+        self._num_threads = num_threads
+        if num_threads is None:
+            self._num_threads = os.cpu_count() - 1
 
         # If a custom Gutenberg repository path is provided, use it
         if gutenberg_repo_path is not None:
@@ -37,6 +44,8 @@ class GutenbergDataLoader:
             self.train_df = self._enrich_dataframe(self.train_df)
             self.val_df = self._enrich_dataframe(self.val_df)
             self.test_df = self._enrich_dataframe(self.test_df)
+
+        self._tokenize_all_text(self)
 
     def _load_data_set(self, csv_file, skip_first_and_last_words=100):
         """
@@ -170,11 +179,13 @@ class GutenbergDataLoader:
         chunk = []
         words = text.split(' ')
 
+        # If the total number of words is less than the chunk size * number of chunks, return the text
         if num_chunks * chunk_size > len(words):
             return text
+
         for i in range(num_chunks):
-            new_words = []
             num_words = len(words)
+            # If the chunk is larger than the number of words, return the rest of the text
             if chunk_size > num_words:
                 chunk = chunk + words
                 words = []
@@ -191,6 +202,10 @@ class GutenbergDataLoader:
         return ' '.join(chunk)
 
     def random_chunk_all_text(self, num_chunks=10, chunk_size=1000, overlap=False):
+        """
+        Randomly chunk the text in the train, validation, and test dataframes.
+        """
+        # Randomly chunk the text in the train, validation, and test dataframes
         self.train_df['text'] = self.train_df['text'].apply(
             lambda x: self._random_chunk_one_text(x, num_chunks, chunk_size, overlap))
         self.test_df['text'] = self.test_df['text'].apply(
@@ -216,3 +231,25 @@ class GutenbergDataLoader:
 
         df['subj_str']=subj_docs
         return df
+
+    def _tokenize_all_text(self):
+        """
+        Tokenize all text in the train, validation, and test dataframes.
+        """
+        # Tokenize the text in the train, validation, and test dataframes
+        tokenized = process_map(word_tokenize, self.train_df['text'], max_workers=self._num_threads, chunksize=5)
+        self.train_df['tokenized'] = tokenized
+        tokenized = process_map(word_tokenize, self.val_df['text'], max_workers=self._num_threads, chunksize=5)
+        self.val_df['tokenized'] = tokenized
+        tokenized = process_map(word_tokenize, self.test_df['text'], max_workers=self._num_threads, chunksize=5)
+        self.test_df['tokenized'] = tokenized
+
+        # Check for null values in the tokenized columns
+        if self.train_df['tokenized'].isnull().any():
+            print('Warning: There are null elements in train_df')
+
+        if self.val_df['tokenized'].isnull().any():
+            print('Warning: There are null elements in val_df')
+
+        if self.test_df['tokenized'].isnull().any():
+            print('Warning: There are null elements in test_df')
