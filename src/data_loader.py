@@ -4,8 +4,13 @@ from pathlib import Path
 
 import pandas as pd
 import numpy as np
-from nltk.tokenize import word_tokenize
 from tqdm.contrib.concurrent import process_map
+from nltk.tokenize import word_tokenize
+from nltk import pos_tag
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+from nltk.corpus import wordnet as wn
+from collections import defaultdict
 
 
 
@@ -253,3 +258,38 @@ class GutenbergDataLoader:
 
         if self.test_df['tokenized'].isnull().any():
             print('Warning: There are null elements in test_df')
+
+    def _lemmatize_text(self, tokenized_text):
+        tag_map = defaultdict(lambda : wn.NOUN)
+        tag_map['J'] = wn.ADJ
+        tag_map['V'] = wn.VERB
+        tag_map['R'] = wn.ADV
+        # Do I need to add noun?
+
+        # Declaring Empty List to store the words that follow the rules for this step
+        final_words = []
+        # Initializing WordNetLemmatizer()
+        word_lemmatized = WordNetLemmatizer()
+        # pos_tag function below will provide the 'tag' i.e if the word is Noun(N) or Verb(V) or something else.
+        for word, tag in pos_tag(tokenized_text):
+            # Below condition is to check for Stop words and consider only alphabets
+            if word not in stopwords.words('english') and word.isalpha():
+                word_final = word_lemmatized.lemmatize(word,tag_map[tag[0]])
+                final_words.append(word_final)
+        return str(final_words)
+        # The final processed set of words for each iteration will be stored in 'text_final'
+
+    def lemmatize_all_text(self):
+        """
+        Lemmatize all text in the train, validation, and test dataframes.
+        """
+        # Lemmatize the text in the train, validation, and test dataframes
+        # This function uses the process_map function from tqdm to parallelize the lemmatization process
+        # across multiple threads for faster processing.
+        # Do I want to do this using Pool.starmap instead?
+        lemmatized = process_map(self._lemmatize_text, self.train_df['tokenized'], max_workers=self._num_threads, chunksize=5)
+        self.train_df['lemmatized'] = lemmatized
+        lemmatized = process_map(self._lemmatize_text, self.val_df['tokenized'], max_workers=self._num_threads, chunksize=5)
+        self.val_df['lemmatized'] = lemmatized
+        lemmatized = process_map(self._lemmatize_text, self.test_df['tokenized'], max_workers=self._num_threads, chunksize=5)
+        self.test_df['lemmatized'] = lemmatized
