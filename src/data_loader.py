@@ -21,8 +21,7 @@ class GutenbergDataLoader:
     """
 
     def __init__(self, data_dir='sample_dataset',
-                 train_csv='final_train.csv', val_csv='final_val.csv', test_csv='final_test.csv',
-                 gutenberg_repo_path=None, enrich_df=True, skip_first_and_last_words=100, num_threads=None):
+                 gutenberg_repo_path=None, num_threads=None):
 
         self._data_dir = data_dir
         self._num_threads = num_threads
@@ -41,6 +40,12 @@ class GutenbergDataLoader:
 
         self._gutenberg_data_path = os.path.join(gutenberg_repo_path, 'data')
 
+    def load_and_process_data(self, train_csv='final_train.csv', val_csv='final_val.csv', test_csv='final_test.csv',
+                            skip_first_and_last_words=100, enrich_df=False):
+        """
+        Load and process the train, validation, and test datasets.
+        """
+        # Load the train, validation, and test datasets
         self.train_df = self._load_data_set(train_csv, skip_first_and_last_words)
         self.val_df = self._load_data_set(val_csv, skip_first_and_last_words)
         self.test_df = self._load_data_set(test_csv, skip_first_and_last_words)
@@ -50,7 +55,7 @@ class GutenbergDataLoader:
             self.val_df = self._enrich_dataframe(self.val_df)
             self.test_df = self._enrich_dataframe(self.test_df)
 
-        self._tokenize_all_text(self)
+        self._tokenize_all_text()
 
     def _load_data_set(self, csv_file, skip_first_and_last_words=100):
         """
@@ -58,7 +63,7 @@ class GutenbergDataLoader:
         """
         csv_path = os.path.join(self._data_dir, csv_file)
         df = pd.read_csv(csv_path, index_col='Unnamed: 0')
-        df['text'] = df['id'].apply(lambda x: self._get_book(x, skip_first_and_last_words=100))
+        df['text'] = df['id'].apply(lambda x: self._get_book(x, skip_first_and_last_words=skip_first_and_last_words))
 
         return df
 
