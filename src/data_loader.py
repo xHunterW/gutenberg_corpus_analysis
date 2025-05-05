@@ -293,3 +293,35 @@ class GutenbergDataLoader:
         self.val_df['lemmatized'] = lemmatized
         lemmatized = process_map(self._lemmatize_text, self.test_df['tokenized'], max_workers=self._num_threads, chunksize=5)
         self.test_df['lemmatized'] = lemmatized
+
+    def save_pickle(self, path=None, description=None):
+        """
+        Save the train, validation, and test dataframes to pickle files.
+        """
+        if path is None:
+            path = self._data_dir
+
+        if description is None:
+            description = ''
+        else:
+            description = '_' + description
+
+        self.train_df.to_pickle(os.path.join(path, f'train_df{description}.pkl'))
+        self.val_df.to_pickle(os.path.join(path, f'val_df{description}.pkl'))
+        self.test_df.to_pickle(os.path.join(path, f'test_df{description}.pkl'))
+
+    def load_pickle(self, path=None, description=None):
+        """
+        Load the train, validation, and test dataframes from pickle files.
+        """
+        if path is None:
+            path = self._data_dir
+
+        if description is None:
+            description = ''
+        else:
+            description = '_' + description
+
+        self.train_df = pd.read_pickle(os.path.join(path, f'train_df_{description}.pkl'))
+        self.val_df = pd.read_pickle(os.path.join(path, f'val_df_{description}.pkl'))
+        self.test_df = pd.read_pickle(os.path.join(path, f'test_df_{description}.pkl'))
